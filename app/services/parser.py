@@ -16,7 +16,7 @@ def start_driver():
     return driver
 
 def scroll_page(driver, scrolls=6, pause=1.2):
-    for _ in range(scrolls):
+    for i in range(scrolls):
         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
         time.sleep(pause)
 
