@@ -7,6 +7,8 @@ from app.services.parser import start_driver, scroll_page
 
 from openpyxl import Workbook
 from io import BytesIO
+
+
 def search_links(driver):
     cards = driver.find_elements(By.CSS_SELECTOR, "article.product-card a.product-card__link")
     links = []
@@ -59,11 +61,11 @@ def get_info_page(driver, link):
     if not info["sizes_available"]:
         info['sizes_available'] = info["sizes"]
 
-    rating = driver.find_element(By.XPATH, '//*[@id="product-feedbacks"]/div[2]/div[1]/div[1]/div[1]/b')
-    info['rating'] = rating.text
+    rating = driver.find_elements(By.XPATH, '//*[@id="product-feedbacks"]/div[2]/div[1]/div[1]/div[1]/b')
+    info['rating'] = rating[0].text.strip() if rating else "0"
 
-    reviews_amount = driver.find_element(By.XPATH, '//*[@id="product-feedbacks"]/div[2]/div[1]/div[1]/a')
-    info['reviews_amount'] = reviews_amount.text.split()[0]
+    reviews_amount = driver.find_elements(By.XPATH, '//*[@id="product-feedbacks"]/div[2]/div[1]/div[1]/a')
+    info['reviews_amount'] = (reviews_amount[0].text.split()[0] if reviews_amount and reviews_amount[0].text else "0")
 
     wait = WebDriverWait(driver, 15)
     btn = wait.until(EC.element_to_be_clickable(
@@ -87,9 +89,10 @@ def get_info_page(driver, link):
         for row in rows:
             key = row.find_element(By.XPATH, './/th').text.strip()
             value = row.find_element(By.XPATH, './/td').text.strip()
-            info['characteristic'][caption.text].append({"key" : key, "value" : value})
+            info['characteristic'][caption.text].append({"key": key, "value": value})
 
     return info
+
 
 def get_search_results(search):
     driver = start_driver()
@@ -98,16 +101,22 @@ def get_search_results(search):
     links = search_links(driver)
     total_info = []
     for link in links:
-        total_info.append(get_info_page(driver, link))
+        try:
+            total_info.append(get_info_page(driver, link))
+        except Exception as e:
+            print(f"[ERROR] {type(e).__name__}")
+
+
     driver.quit()
     return total_info
+
 
 def from_dict_get_excel(total_info, min_rating, max_price):
     filtered_info = []
     for info in total_info:
         if min_rating is not None and float(info['rating'].replace(',', '.')) < min_rating:
             continue
-        if max_price is not None and float(info['price'].r) > max_price:
+        if max_price is not None and float(info['price'].replace(' ', '')[:-1].replace(',', '.')) > max_price:
             continue
         filtered_info.append(info)
 
@@ -136,7 +145,8 @@ def from_dict_get_excel(total_info, min_rating, max_price):
         ws[f'E{i}'] = ", ".join(info['images'])
         ws[f'F{i}'] = info['description']
         ws[f'G{i}'] = ", ".join([f"{d['key']} - {d['value']}" for d in info['characteristic']["Основная информация"]])
-        ws[f'H{i}'] = ", ".join([f"{d['key']} - {d['value']}" for d in info['characteristic']['Дополнительная информация']])
+        ws[f'H{i}'] = ", ".join(
+            [f"{d['key']} - {d['value']}" for d in info['characteristic']['Дополнительная информация']])
         ws[f'I{i}'] = info['seller_name']
         ws[f'J{i}'] = info['seller_link']
         ws[f'K{i}'] = ", ".join(info['sizes'])
@@ -147,6 +157,3 @@ def from_dict_get_excel(total_info, min_rating, max_price):
     buff = BytesIO()
     wb.save(buff)
     return buff.getvalue()
-
-
-
